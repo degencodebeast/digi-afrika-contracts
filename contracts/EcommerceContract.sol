@@ -55,6 +55,7 @@ contract DecentralizedEcommerce {
         if (!productExists[_productId]) {
             revert InexistentProduct();
         }
+        _;
     }
 
     constructor() {
@@ -62,16 +63,13 @@ contract DecentralizedEcommerce {
     }
 
     // Function to create a new product
-    function createProduct(
-        string memory cid,
-        uint256 price
-    ) external {
+    function createProduct(string memory cid, uint256 price) external {
         uint256 productId = _productIds.current();
         //require(!productsExists[productId], "Product already exists");
 
         //used reverts instead of require to save gas at deployment
-        if(productsExists[productId]) {
-            revert ProductAlreadyExists()l
+        if (productExists[productId]) {
+            revert ProductAlreadyExists();
         }
 
         productsIdToProducts[productId] = Product(
@@ -106,33 +104,37 @@ contract DecentralizedEcommerce {
 
         // For this example, we'll emit the event
         emit DisputeResolved(
-            productId,
+            _productId,
             msg.sender,
-            productsIdToProducts[productId].seller
+            productsIdToProducts[_productId].seller
         );
     }
 
     // Function to reward user points when buying a product
-    function buyProduct(uint256 productId) external payable productIdExists(_productId)  {
+    function buyProduct(
+        uint256 _productId
+    ) external payable productIdExists(_productId) {
         //require(products[productId].exists, "Product does not exist");
 
         //require(msg.value >= productsIdToProducts[productId].price, "Insufficient payment");
 
         //used reverts instead of require to save gas at deployment
-        if(msg.value < productsIdToProducts[productId].price) {
+        if (msg.value < productsIdToProducts[_productId].price) {
             revert InsufficientPayment();
         }
 
         // Calculate and reward points
-        uint256 points = productsIdToProducts[productId].price / 100; // 1% of the price
+        uint256 points = productsIdToProducts[_productId].price / 100; // 1% of the price
         userPoints[msg.sender] += points;
 
         // Transfer payment to the seller
-        address payable seller = payable(productsIdToProducts[productId].seller);
+        address payable seller = payable(
+            productsIdToProducts[_productId].seller
+        );
         seller.transfer(msg.value);
 
         // Remove the product after successful purchase
-        delete productsIdToProducts[productId];
-        delete products[productId];
+        delete productsIdToProducts[_productId];
+        delete products[_productId];
     }
 }
