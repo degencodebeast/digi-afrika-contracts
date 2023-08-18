@@ -20,6 +20,7 @@ contract DecentralizedEcommerce {
     using Counters for Counters.Counter;
 
     Counters.Counter private _productIds;
+    Counters.Counter private _indexCounter;
 
     // Structure to store product details
     struct Product {
@@ -34,6 +35,8 @@ contract DecentralizedEcommerce {
 
     // Mapping to store products by their unique identifiers
     mapping(uint256 => Product) public productsIdToProducts;
+
+    mapping(uint256 => uint256) public productsIdToIndex;
 
     // Event to log new product creation
     event ProductCreated(
@@ -65,6 +68,7 @@ contract DecentralizedEcommerce {
     // Function to create a new product
     function createProduct(string memory cid, uint256 price) external {
         uint256 productId = _productIds.current();
+        uint256 index = _indexCounter.current();
         //require(!productsExists[productId], "Product already exists");
 
         //used reverts instead of require to save gas at deployment
@@ -79,6 +83,7 @@ contract DecentralizedEcommerce {
             price,
             false
         );
+        productsIdToIndex[productId] = index;
         productExists[productId] = true;
         products.push(productsIdToProducts[productId]);
         _productIds.increment();
@@ -135,14 +140,25 @@ contract DecentralizedEcommerce {
 
         // Remove the product after successful purchase
         delete productsIdToProducts[_productId];
-        delete products[_productId];
+        uint256 productIndex = _getProductIdIndex(_productId);
+        delete products[productIndex];
+    }
+
+    function _getProductIdIndex(
+        uint256 _productId
+    ) internal returns (uint256 _index) {
+        _index = productsIdToIndex[_productId];
     }
 
     function removeProduct(uint256 _productId) {
-
+        address seller = productsIdToProducts[_productId].seller;
+        if (msg.sender != seller) {
+            revert UnauthorizedSeller();
+        }
+        delete productsIdToProducts[_productId];
+        uint256 productIndex = _getProductIdIndex(_productId);
+        delete products[productIndex];
     }
 
-    function resolveDispute() {
-        
-    }
+    function resolveDispute() {}
 }
