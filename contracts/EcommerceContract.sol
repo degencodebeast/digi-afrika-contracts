@@ -137,4 +137,12 @@ contract DecentralizedEcommerce {
         delete productsIdToProducts[_productId];
         delete products[_productId];
     }
+
+    function removeProduct(uint256 _productId) {
+
+    }
+
+    function resolveDispute() {
+        
+    }
 }
