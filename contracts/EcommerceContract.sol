@@ -16,11 +16,13 @@ error InsufficientPayment();
 
 error ProductAlreadyExists();
 
-contract DecentralizedEcommerce {
+contract DecentralizedEcommerce is Ownable{
     using Counters for Counters.Counter;
 
     Counters.Counter private _productIds;
     Counters.Counter private _indexCounter;
+
+    uint256 
 
     // Structure to store product details
     struct Product {
@@ -37,6 +39,10 @@ contract DecentralizedEcommerce {
     mapping(uint256 => Product) public productsIdToProducts;
 
     mapping(uint256 => uint256) public productsIdToIndex;
+
+    mapping(address => Product[]) public ownerToProducts;
+
+    mapping(uint256 => Product) public productIdToOwner;
 
     // Event to log new product creation
     event ProductCreated(
@@ -85,6 +91,8 @@ contract DecentralizedEcommerce {
         );
         productsIdToIndex[productId] = index;
         productExists[productId] = true;
+        ownerToProducts[msg.sender].push(productsIdToProducts[productId]);
+        productIdToOwner[productId] = msg.sender;
         products.push(productsIdToProducts[productId]);
         _productIds.increment();
 
@@ -139,25 +147,83 @@ contract DecentralizedEcommerce {
         seller.transfer(msg.value);
 
         // Remove the product after successful purchase
-        delete productsIdToProducts[_productId];
+        
+        address productOwner = productIdToOwner[_productId];
+        Product[] memory ownerProducts = ownerToProducts[productOwner];
+        Product memory _product = productsIdToProducts[_productId];        
         uint256 productIndex = _getProductIdIndex(_productId);
+        Product[] memory newOwnerArray = _deleteFromArray(productOwner, _product, ownerProducts);
+        ownerToProducts[productOwner] = newOwnerArray;
         delete products[productIndex];
+        delete productsIdToProducts[_productId];
     }
+
+      function _deleteFromArray(address key, Product value, Product[] memory _dataArray) internal returns (Product[] memory newDataArr){
+        //uint256[] storage dataArray = dataMapping[key];
+
+        for (uint256 i = 0; i < _dataArray.length; i++) {
+            if (_dataArray[i].id == value.id) {
+                // Replace the element at index i with the last element
+                _dataArray[i] = _dataArray[_dataArray.length - 1];
+                // Remove the last element (pop)
+                _dataArray.pop();
+                break;  // Exit the loop after the first occurrence is removed
+            }
+        }
+         _newDataArr = _dataArray;
+    }
+
+//     function _deleteFromArray(address key, Product value, Product[] memory _dataArray) internal returns (Product[] memory newDataArr) {
+//     // Create a new array to hold the modified data
+//     Product[] memory updatedDataArray = new Product[](_dataArray.length - 1);
+//     uint256 currentIndex = 0;
+
+//     for (uint256 i = 0; i < _dataArray.length; i++) {
+//         if (_dataArray[i].id != value.id) {
+//             // Only copy non-matching elements to the updated array
+//             updatedDataArray[currentIndex] = _dataArray[i];
+//             currentIndex++;
+//         }
+//     }
+
+//     // Set the newDataArr variable to the updated array
+//     newDataArr = updatedDataArray;
+// }
+
 
     function _getProductIdIndex(
         uint256 _productId
-    ) internal returns (uint256 _index) {
+    ) internal productIdExists(_productId) returns (uint256 _index) {
         _index = productsIdToIndex[_productId];
     }
 
-    function removeProduct(uint256 _productId) {
+    function getAllProducts() public returns(uint256 allProducts) {
+        allProducts = products;
+    }
+
+    function getProductsByAddress(address _owner) public returns(uint256[] products) {
+        products = ownerProducts[_owner];
+    }
+
+    function removeProduct(
+        uint256 _productId
+    ) external productIdExists(_productId) {
         address seller = productsIdToProducts[_productId].seller;
         if (msg.sender != seller) {
             revert UnauthorizedSeller();
         }
-        delete productsIdToProducts[_productId];
+        // delete productsIdToProducts[_productId];
+        // uint256 productIndex = _getProductIdIndex(_productId);
+        // delete products[productIndex];
+        
+        address productOwner = productIdToOwner[_productId];
+        Product[] memory ownerProducts = ownerToProducts[productOwner];
+        Product memory _product = productsIdToProducts[_productId];        
         uint256 productIndex = _getProductIdIndex(_productId);
+        Product[] memory newOwnerArray = _deleteFromArray(productOwner, _product, ownerProducts);
+        ownerToProducts[productOwner] = newOwnerArray;
         delete products[productIndex];
+        delete productsIdToProducts[_productId];
     }
 
     function resolveDispute() {}
