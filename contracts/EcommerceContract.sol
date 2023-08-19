@@ -16,6 +16,8 @@ error InsufficientPayment();
 
 error ProductAlreadyExists();
 
+error ProductAlreadyRemoved();
+
 contract DecentralizedEcommerce is Ownable {
     using Counters for Counters.Counter;
 
@@ -38,9 +40,11 @@ contract DecentralizedEcommerce is Ownable {
 
     mapping(uint256 => uint256) public productsIdToIndex;
 
-    mapping(address => Product[]) public ownerToProducts;
+    mapping(address => Product[]) internal ownerToProducts;
 
     mapping(uint256 => address) public productIdToOwner;
+
+    mapping(uint256 => bool) public hasBeenRemoved;
 
     // Event to log new product creation
     event ProductCreated(
@@ -73,12 +77,11 @@ contract DecentralizedEcommerce is Ownable {
     function createProduct(string memory cid, uint256 price) external {
         uint256 productId = _productIds.current();
         uint256 index = _indexCounter.current();
-        //require(!productsExists[productId], "Product already exists");
 
-        //used reverts instead of require to save gas at deployment
-        if (productExists[productId]) {
-            revert ProductAlreadyExists();
-        }
+        // //used reverts instead of require to save gas at deployment
+        // if (productExists[productId]) {
+        //     revert ProductAlreadyExists();
+        // }
 
         productsIdToProducts[productId] = Product(
             productId,
@@ -101,10 +104,6 @@ contract DecentralizedEcommerce is Ownable {
     function initiateDispute(
         uint256 _productId
     ) external productIdExists(_productId) {
-        //require(products[productId].exists, "Product does not exist");
-
-        //require(msg.sender != products[productId].seller, "Cannot dispute your own product");
-
         //used reverts instead of require to save gas at deployment
         if (msg.sender == productsIdToProducts[_productId].seller) {
             revert DisputeError("You cannot dispute your own product");
@@ -125,10 +124,6 @@ contract DecentralizedEcommerce is Ownable {
     function buyProduct(
         uint256 _productId
     ) external payable productIdExists(_productId) {
-        //require(products[productId].exists, "Product does not exist");
-
-        //require(msg.value >= productsIdToProducts[productId].price, "Insufficient payment");
-
         //used reverts instead of require to save gas at deployment
         if (msg.value < productsIdToProducts[_productId].price) {
             revert InsufficientPayment();
@@ -137,19 +132,23 @@ contract DecentralizedEcommerce is Ownable {
         // Calculate and reward points
         uint256 points = productsIdToProducts[_productId].price / 100; // 1% of the price
         userPoints[msg.sender] += points;
+        productsIdToProducts[_productId].sold = true;
+        productsIdToProducts[_productId].seller = msg.sender;
+
+        uint256 productIndex = _getProductIdIndex(_productId);
+
+        //delete previous owner of product
+        _deleteFromOwnerArray(_productId);
+        productIdToOwner[_productId] = msg.sender;
+        ownerToProducts[msg.sender].push(productsIdToProducts[_productId]);
+        delete products[productIndex];
+        delete productsIdToProducts[_productId];
 
         // Transfer payment to the seller
         address payable seller = payable(
             productsIdToProducts[_productId].seller
         );
         seller.transfer(msg.value);
-
-        // Remove the product after successful purchase
-
-        uint256 productIndex = _getProductIdIndex(_productId);
-        _deleteFromOwnerArray(_productId);
-        delete products[productIndex];
-        delete productsIdToProducts[_productId];
     }
 
     function _deleteFromOwnerArray(uint256 _productId) internal {
@@ -215,10 +214,16 @@ contract DecentralizedEcommerce is Ownable {
             revert UnauthorizedSeller();
         }
 
+        if (hasBeenRemoved[_productId]) {
+            revert ProductAlreadyRemoved();
+        }
+
         uint256 productIndex = _getProductIdIndex(_productId);
         _deleteFromOwnerArray(_productId);
         delete products[productIndex];
         delete productsIdToProducts[_productId];
+        delete productIdToOwner[_productId];
+        hasBeenRemoved[_productId] = true;
     }
 
     function resolveDispute() public {}
