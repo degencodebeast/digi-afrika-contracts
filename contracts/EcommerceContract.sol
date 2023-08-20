@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 
 error UnauthorizedSeller();
 
-error UnauthorizedOwner();
+error UnauthorizedCaller();
 
 error InexistentProduct();
 
@@ -18,11 +18,27 @@ error ProductAlreadyExists();
 
 error ProductAlreadyRemoved();
 
+error UnauthorizedClaim();
+
+error InSufficientPoints();
+
+error BelowMinimumPrice();
+
 contract DecentralizedEcommerce is Ownable {
     using Counters for Counters.Counter;
 
     Counters.Counter private _productIds;
     Counters.Counter private _indexCounter;
+
+    //uint256 private feeRatio;
+
+    uint256 private minimumListingFee = 0.5 ether;
+
+    uint256 private pointsThreshold = 500;
+
+    uint256 private pointsThresholdAllocation = 0.001 ether;
+
+    //address private reserveContract;
 
     // Structure to store product details
     struct Product {
@@ -55,7 +71,13 @@ contract DecentralizedEcommerce is Ownable {
     );
 
     // Event to log dispute resolution
-    event DisputeResolved(uint256 productId, address resolver, address winner);
+    event DisputeResolved(
+        uint256 productId,
+        address indexed resolver,
+        address indexed winner
+    );
+
+    event PurchaseSuccessful(uint256 productId, address indexed buyer);
 
     // Mapping to track user points
     mapping(address => uint256) public userPoints;
@@ -69,8 +91,11 @@ contract DecentralizedEcommerce is Ownable {
         _;
     }
 
-    constructor() {
+    constructor(/*uint256 _feePercentage , address _reserveContract*/) {
         _productIds.increment();
+        //reserveContract = _reserveContract;
+        // uint256 _feePercentageBigN = _feePercentage * 10 ** 18;
+        // feeRatio = _feePercentageBigN / 100;
     }
 
     // Function to create a new product
@@ -82,6 +107,10 @@ contract DecentralizedEcommerce is Ownable {
         // if (productExists[productId]) {
         //     revert ProductAlreadyExists();
         // }
+
+        if (price < minimumListingFee) {
+            revert BelowMinimumPrice();
+        }
 
         productsIdToProducts[productId] = Product(
             productId,
@@ -125,30 +154,39 @@ contract DecentralizedEcommerce is Ownable {
         uint256 _productId
     ) external payable productIdExists(_productId) {
         //used reverts instead of require to save gas at deployment
-        if (msg.value < productsIdToProducts[_productId].price) {
+        Product memory product = productsIdToProducts[_productId];
+
+        if (msg.value < product.price) {
             revert InsufficientPayment();
         }
 
         // Calculate and reward points
-        uint256 points = productsIdToProducts[_productId].price / 100; // 1% of the price
+        uint256 points = product.price / 10 ** 18; // 1% of the price
+        //uint256 points = priceInPoints / 100;
         userPoints[msg.sender] += points;
-        productsIdToProducts[_productId].sold = true;
-        productsIdToProducts[_productId].seller = msg.sender;
+        product.sold = true;
+        product.seller = msg.sender;
 
-        uint256 productIndex = _getProductIdIndex(_productId);
+        //uint256 productIndex = _getProductIdIndex(_productId);
 
         //delete previous owner of product
         _deleteFromOwnerArray(_productId);
         productIdToOwner[_productId] = msg.sender;
         ownerToProducts[msg.sender].push(productsIdToProducts[_productId]);
-        delete products[productIndex];
-        delete productsIdToProducts[_productId];
+
+        //delete products[productIndex];
+        //delete productsIdToProducts[_productId];
 
         // Transfer payment to the seller
-        address payable seller = payable(
-            productsIdToProducts[_productId].seller
-        );
-        seller.transfer(msg.value);
+        address payable seller = payable(product.seller);
+
+        //uint256 fee = product.price * feeRatio;
+        uint256 fee = product.price / 50;
+        uint256 sellerEarnings = product.price - fee;
+        payable(address(this)).transfer(fee);
+        seller.transfer(sellerEarnings);
+
+        emit PurchaseSuccessful(_productId, msg.sender);
     }
 
     function _deleteFromOwnerArray(uint256 _productId) internal {
@@ -169,23 +207,6 @@ contract DecentralizedEcommerce is Ownable {
         ownerToProducts[productOwner] = ownerProducts;
     }
 
-    //     function _deleteFromArray(address key, Product value, Product[] memory _dataArray) internal returns (Product[] memory newDataArr) {
-    //     // Create a new array to hold the modified data
-    //     Product[] memory updatedDataArray = new Product[](_dataArray.length - 1);
-    //     uint256 currentIndex = 0;
-
-    //     for (uint256 i = 0; i < _dataArray.length; i++) {
-    //         if (_dataArray[i].id != value.id) {
-    //             // Only copy non-matching elements to the updated array
-    //             updatedDataArray[currentIndex] = _dataArray[i];
-    //             currentIndex++;
-    //         }
-    //     }
-
-    //     // Set the newDataArr variable to the updated array
-    //     newDataArr = updatedDataArray;
-    // }
-
     function _getProductIdIndex(
         uint256 _productId
     ) internal view productIdExists(_productId) returns (uint256 _index) {
@@ -200,7 +221,7 @@ contract DecentralizedEcommerce is Ownable {
         allProducts = products;
     }
 
-    function getProductsByAddress(
+    function getProductsByOwnerAddress(
         address _owner
     ) public view returns (Product[] memory _products) {
         _products = ownerToProducts[_owner];
@@ -226,5 +247,54 @@ contract DecentralizedEcommerce is Ownable {
         hasBeenRemoved[_productId] = true;
     }
 
+    function getProductsById(
+        uint256 _productId
+    ) public view returns (Product memory _product) {
+        _product = productsIdToProducts[_productId];
+    }
+
+    function getUserPoints(
+        address _user
+    ) public view returns (uint256 _userPoints) {
+        _userPoints = userPoints[_user];
+    }
+
+    function redeemUserPoints(address payable user) public {
+        uint256 points = userPoints[user];
+
+        if (msg.sender == user) {
+            revert UnauthorizedCaller();
+        }
+
+        if (points < pointsThreshold) {
+            revert InSufficientPoints();
+        }
+
+        uint256 amount = points * pointsThresholdAllocation;
+
+        payable(user).transfer(amount);
+    }
+
     function resolveDispute() public {}
+
+    //     function _deleteFromArray(address key, Product value, Product[] memory _dataArray) internal returns (Product[] memory newDataArr) {
+    //     // Create a new array to hold the modified data
+    //     Product[] memory updatedDataArray = new Product[](_dataArray.length - 1);
+    //     uint256 currentIndex = 0;
+
+    //     for (uint256 i = 0; i < _dataArray.length; i++) {
+    //         if (_dataArray[i].id != value.id) {
+    //             // Only copy non-matching elements to the updated array
+    //             updatedDataArray[currentIndex] = _dataArray[i];
+    //             currentIndex++;
+    //         }
+    //     }
+
+    //     // Set the newDataArr variable to the updated array
+    //     newDataArr = updatedDataArray;
+    // }
+
+    receive() external payable {
+        // Handle the received Ether here
+    }
 }
