@@ -179,6 +179,9 @@ contract DecentralizedEcommerce is Ownable {
         productIdToOwner[_productId] = msg.sender;
         ownerToProducts[msg.sender].push(product);
 
+        uint256 _productIndex = _getProductIdIndex(_productId);
+        products[_productIndex] = product;
+
         productsIdToProducts[_productId] = product;
 
         //uint256 fee = product.price * feeRatio;
