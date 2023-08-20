@@ -262,7 +262,7 @@ contract DecentralizedEcommerce is Ownable {
     function redeemUserPoints(address payable user) public {
         uint256 points = userPoints[user];
 
-        if (msg.sender == user) {
+        if (msg.sender != user) {
             revert UnauthorizedCaller();
         }
 
