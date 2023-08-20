@@ -18,6 +18,8 @@ error ProductAlreadyExists();
 
 error ProductAlreadyRemoved();
 
+error ProductAlreadySold();
+
 error UnauthorizedClaim();
 
 error InSufficientPoints();
@@ -155,19 +157,22 @@ contract DecentralizedEcommerce is Ownable {
     ) external payable productIdExists(_productId) {
         //used reverts instead of require to save gas at deployment
         Product memory product = productsIdToProducts[_productId];
+        address payable initialSeller = payable(product.seller);
 
         if (msg.value < product.price) {
             revert InsufficientPayment();
         }
 
+        if (product.sold) {
+            revert ProductAlreadySold();
+        }
+
         // Calculate and reward points
-        uint256 points = product.price / 10 ** 18; // 1% of the price
+        uint256 points = product.price / 10 ** 17; // 1% of the price
         //uint256 points = priceInPoints / 100;
         userPoints[msg.sender] += points;
         product.sold = true;
         product.seller = msg.sender;
-
-        //uint256 productIndex = _getProductIdIndex(_productId);
 
         //delete previous owner of product
         _deleteFromOwnerArray(_productId);
@@ -176,17 +181,11 @@ contract DecentralizedEcommerce is Ownable {
 
         productsIdToProducts[_productId] = product;
 
-        //delete products[productIndex];
-        //delete productsIdToProducts[_productId];
-
-        // Transfer payment to the seller
-        address payable seller = payable(product.seller);
-
         //uint256 fee = product.price * feeRatio;
         uint256 fee = product.price / 50;
         uint256 sellerEarnings = product.price - fee;
         payable(address(this)).transfer(fee);
-        seller.transfer(sellerEarnings);
+        initialSeller.transfer(sellerEarnings);
 
         emit PurchaseSuccessful(_productId, msg.sender);
     }
