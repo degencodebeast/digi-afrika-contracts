@@ -91,7 +91,7 @@ contract DecentralizedEcommerce is Ownable {
         _;
     }
 
-    constructor(/*uint256 _feePercentage , address _reserveContract*/) {
+    constructor() /*uint256 _feePercentage , address _reserveContract*/ {
         _productIds.increment();
         //reserveContract = _reserveContract;
         // uint256 _feePercentageBigN = _feePercentage * 10 ** 18;
@@ -172,7 +172,9 @@ contract DecentralizedEcommerce is Ownable {
         //delete previous owner of product
         _deleteFromOwnerArray(_productId);
         productIdToOwner[_productId] = msg.sender;
-        ownerToProducts[msg.sender].push(productsIdToProducts[_productId]);
+        ownerToProducts[msg.sender].push(product);
+
+        productsIdToProducts[_productId] = product;
 
         //delete products[productIndex];
         //delete productsIdToProducts[_productId];
@@ -272,7 +274,16 @@ contract DecentralizedEcommerce is Ownable {
 
         uint256 amount = points * pointsThresholdAllocation;
 
-        payable(user).transfer(amount);
+        //payable(user).transfer(amount);
+
+        if (address(this).balance < amount) {
+            revert("Insufficient contract balance");
+        }
+
+        userPoints[msg.sender] = 0; // Reset user's points
+
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "Transfer failed");
     }
 
     function resolveDispute() public {}
