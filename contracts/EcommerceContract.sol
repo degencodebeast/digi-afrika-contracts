@@ -127,6 +127,7 @@ contract DecentralizedEcommerce is Ownable {
         productIdToOwner[productId] = msg.sender;
         products.push(productsIdToProducts[productId]);
         _productIds.increment();
+        _indexCounter.increment();
 
         emit ProductCreated(productId, msg.sender, cid, price);
     }
@@ -178,7 +179,6 @@ contract DecentralizedEcommerce is Ownable {
         _deleteFromOwnerArray(_productId);
         productIdToOwner[_productId] = msg.sender;
         ownerToProducts[msg.sender].push(product);
-
         uint256 _productIndex = _getProductIdIndex(_productId);
         products[_productIndex] = product;
 
@@ -276,8 +276,6 @@ contract DecentralizedEcommerce is Ownable {
 
         uint256 amount = points * pointsThresholdAllocation;
 
-        //payable(user).transfer(amount);
-
         if (address(this).balance < amount) {
             revert("Insufficient contract balance");
         }
@@ -289,23 +287,6 @@ contract DecentralizedEcommerce is Ownable {
     }
 
     function resolveDispute() public {}
-
-    //     function _deleteFromArray(address key, Product value, Product[] memory _dataArray) internal returns (Product[] memory newDataArr) {
-    //     // Create a new array to hold the modified data
-    //     Product[] memory updatedDataArray = new Product[](_dataArray.length - 1);
-    //     uint256 currentIndex = 0;
-
-    //     for (uint256 i = 0; i < _dataArray.length; i++) {
-    //         if (_dataArray[i].id != value.id) {
-    //             // Only copy non-matching elements to the updated array
-    //             updatedDataArray[currentIndex] = _dataArray[i];
-    //             currentIndex++;
-    //         }
-    //     }
-
-    //     // Set the newDataArr variable to the updated array
-    //     newDataArr = updatedDataArray;
-    // }
 
     receive() external payable {
         // Handle the received Ether here
